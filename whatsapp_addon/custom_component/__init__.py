@@ -1,33 +1,39 @@
+"""WhatsApp integration, the Home Assistant side of the WhatsApp add-on."""
 from __future__ import annotations
 
 import logging
 
-from .whatsapp import Whatsapp, WhatsappAddonError
-
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import Platform
+from homeassistant.core import DOMAIN as HOMEASSISTANT_DOMAIN
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.discovery import async_load_platform
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 
-DOMAIN = "whatsapp"
+from .const import DOMAIN
+from .whatsapp import Whatsapp, WhatsappAddonError
+
 _LOGGER = logging.getLogger(__name__)
 
-SERVICES = {
-    "send_message": "send_message",
-    "set_status": "set_status",
-    "presence_subscribe": "presence_subscribe",
-    "send_presence_update": "send_presence_update",
-    "send_infinity_presence_update": "send_infinity_presence_update",
-}
+PLATFORMS = [Platform.SENSOR]
+
+SERVICES = [
+    "send_message",
+    "set_status",
+    "presence_subscribe",
+    "send_presence_update",
+    "send_infinity_presence_update",
+]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the services and import a `whatsapp:` YAML entry."""
     whatsapp = Whatsapp()
     hass.data[DOMAIN] = whatsapp
 
-    def make_handler(service: str, method_name: str):
-        method = getattr(whatsapp, method_name)
+    def make_handler(service: str):
+        method = getattr(whatsapp, service)
 
         async def handler(call: ServiceCall) -> None:
             try:
@@ -40,12 +46,37 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         return handler
 
-    for service, method_name in SERVICES.items():
-        hass.services.async_register(DOMAIN, service, make_handler(service, method_name))
+    # Services are registered here (not per config entry), so they keep
+    # working exactly as before, with or without the YAML entry.
+    for service in SERVICES:
+        hass.services.async_register(DOMAIN, service, make_handler(service))
 
-    # Status sensor per client (sensor.whatsapp_<client>_status)
-    hass.async_create_task(
-        async_load_platform(hass, Platform.SENSOR, DOMAIN, {}, config)
-    )
+    if DOMAIN in config:
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT}, data={}
+            )
+        )
+        ir.async_create_issue(
+            hass,
+            HOMEASSISTANT_DOMAIN,
+            f"deprecated_yaml_{DOMAIN}",
+            is_fixable=False,
+            issue_domain=DOMAIN,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="deprecated_yaml",
+            translation_placeholders={"domain": DOMAIN, "integration_title": "WhatsApp"},
+        )
 
     return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up the status sensors."""
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload the status sensors."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

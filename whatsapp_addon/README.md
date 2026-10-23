@@ -31,10 +31,6 @@ https://github.com/giuseppecastaldo/ha-addons
 
 Start the add-on and in a few seconds you will see a persistent notification with QRCode, please scan this one with Whatsapp Mobile app.
 
-After add-on installation restart Home Assistant and then copy the following code in _configuration.yaml_
+After add-on installation restart Home Assistant once, so the integration that comes with the add-on is loaded. Then add it via **Settings → Devices & services → Add integration → Whatsapp**. If all went well you will see a _whatsapp.send_message_ action and a status sensor on the _Whatsapp_ device.
 
-```yaml
-whatsapp:
-```
-
-Then restart Home Assistant. If all went well you will se a _whatsapp.send_message_ service.
+Upgrading from an older version with `whatsapp:` in _configuration.yaml_: the integration is added automatically on the first restart. You can then remove `whatsapp:` from _configuration.yaml_ (Home Assistant shows a repair notice for this).

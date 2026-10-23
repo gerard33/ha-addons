@@ -1,7 +1,10 @@
 import requests
 from url_normalize import url_normalize
 
-HOST = 'http://{{HOSTNAME}}:3000/'
+HOSTNAME = '{{HOSTNAME}}'
+HOST = f'http://{HOSTNAME}:3000/'
+# Supervisor slug of the add-on, e.g. 53b417e3_whatsapp_addon
+ADDON_SLUG = HOSTNAME.replace('-', '_')
 TIMEOUT = 60
 
 

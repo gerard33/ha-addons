@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WhatsApp",
+        "description": "Connect Home Assistant to the WhatsApp add-on. Make sure the add-on is started."
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the WhatsApp add-on. Check that it is installed and started."
+    },
+    "abort": {
+      "already_configured": "WhatsApp is already set up."
+    }
+  }
+}
