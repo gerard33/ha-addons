@@ -2,41 +2,42 @@ from __future__ import annotations
 
 import logging
 
-from .whatsapp import Whatsapp
+from .whatsapp import Whatsapp, WhatsappAddonError
 
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import ConfigType
 
 DOMAIN = "whatsapp"
 _LOGGER = logging.getLogger(__name__)
 
+SERVICES = {
+    "send_message": "send_message",
+    "set_status": "set_status",
+    "presence_subscribe": "presence_subscribe",
+    "send_presence_update": "send_presence_update",
+    "send_infinity_presence_update": "send_infinity_presence_update",
+}
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     whatsapp = Whatsapp()
 
-    @callback
-    async def send_message(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(whatsapp.send_message, call.data)
+    def make_handler(service: str, method_name: str):
+        method = getattr(whatsapp, method_name)
 
-    @callback
-    async def set_status(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(whatsapp.set_status, call.data)
+        async def handler(call: ServiceCall) -> None:
+            try:
+                await hass.async_add_executor_job(method, dict(call.data))
+            except WhatsappAddonError as err:
+                # Logged in the HA log and shown as a failed step in the
+                # automation trace; use continue_on_error to fall back.
+                _LOGGER.error("whatsapp.%s failed: %s", service, err)
+                raise HomeAssistantError(f"WhatsApp {service} failed: {err}") from err
 
-    @callback
-    async def presence_subscribe(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(whatsapp.presence_subscribe, call.data)
+        return handler
 
-    @callback
-    async def send_presence_update(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(whatsapp.send_presence_update, call.data)
-
-    @callback
-    async def send_infinity_presence_update(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(whatsapp.send_infinity_presence_update, call.data)
-
-    hass.services.async_register(DOMAIN, 'send_message', send_message)
-    hass.services.async_register(DOMAIN, 'set_status', set_status)
-    hass.services.async_register(DOMAIN, 'presence_subscribe', presence_subscribe)
-    hass.services.async_register(DOMAIN, 'send_presence_update', send_presence_update)
-    hass.services.async_register(DOMAIN, 'send_infinity_presence_update', send_infinity_presence_update)
+    for service, method_name in SERVICES.items():
+        hass.services.async_register(DOMAIN, service, make_handler(service, method_name))
 
     return True

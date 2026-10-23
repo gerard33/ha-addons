@@ -224,7 +224,7 @@ class WhatsappClient extends EventEmitter {
         }
         return result;
       } catch (err) {
-        throw new WhatsappError(err.output.payload.statusCode);
+        throw toWhatsappError(err);
       }
     }
 
@@ -245,7 +245,7 @@ class WhatsappClient extends EventEmitter {
     try {
       await this.#conn.sendPresenceUpdate(type, id);
     } catch (err) {
-      throw new WhatsappError(err.output.payload.statusCode);
+      throw toWhatsappError(err);
     }
   };
 
@@ -262,7 +262,7 @@ class WhatsappClient extends EventEmitter {
       try {
         await this.#conn.presenceSubscribe(id);
       } catch (err) {
-        throw new WhatsappError(err.output.payload.statusCode);
+        throw toWhatsappError(err);
       }
     } else {
       throw new WhatsappNumberNotFoundError(phone);
@@ -277,10 +277,22 @@ class WhatsappClient extends EventEmitter {
     try {
       await this.#conn.updateProfileStatus(status);
     } catch (err) {
-      throw new WhatsappError(err.output.payload.statusCode);
+      throw toWhatsappError(err);
     }
   };
 }
+
+// Baileys errors (Boom) carry a status code; other errors do not
+const toWhatsappError = (err) => {
+  const statusCode = err?.output?.payload?.statusCode;
+  if (statusCode) return new WhatsappError(statusCode);
+
+  const error = new Error(
+    `Send message failed. ${err?.message || "Unknown error"}`
+  );
+  error.name = "WhatsappError";
+  return error;
+};
 
 class WhatsappNumberNotFoundError extends Error {
   constructor(phone = "", ...args) {
@@ -303,7 +315,6 @@ class WhatsappDisconnectedError extends Error {
 class WhatsappError extends Error {
   #errors = {
     428: "Connection Closed",
-    408: "Connection Lost",
     440: "Connection Replaced",
     408: "Timed Out",
     401: "Logged Out",
@@ -317,7 +328,7 @@ class WhatsappError extends Error {
     this.name = "WhatsappError";
     this.code = Number(this.message);
     this.message = `Send message failed. Whatsapp error ${this.message}: ${
-      this.#errors[this.code]
+      this.#errors[this.code] ?? "Unknown"
     }`;
   }
 }

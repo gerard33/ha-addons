@@ -83,10 +83,63 @@ data:
 | ------------------------ | ------------------------------------- |
 | new_whatsapp_message     | The message that was received         |
 | whatsapp_presence_update | Presence of contact in a chat updated |
+| whatsapp_send_failed     | A message (or other request) could not be sent. Data: `clientId`, `action`, `to`, `error`, `error_type`, `code` |
+| whatsapp_connection_update | Connection state of a client changed. Data: `clientId`, `state`, `previous_state`, `reason` |
+
+## Status sensor
+
+For every client the add-on publishes `sensor.whatsapp_<client>_status` (for example `sensor.whatsapp_default_status`).
+
+| State            | Meaning                                         |
+| ---------------- | ----------------------------------------------- |
+| connecting       | Add-on is starting / connecting to WhatsApp     |
+| connected        | Ready to send                                   |
+| disconnected     | Connection lost, add-on is reconnecting         |
+| qr_code_required | Not linked, scan the QR code in notifications   |
+| logged_out       | Removed as linked device, scan the QR code again |
+| stopped          | Add-on was stopped                              |
+
+Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`.
+
+The sensor is created through the Home Assistant API and is refreshed every minute, so after a Home Assistant restart it can be `unavailable` for up to a minute.
+
+## Failure handling
+
+When the add-on cannot send a message, `whatsapp.send_message` fails with an error (visible in the automation trace and the Home Assistant log). Add `continue_on_error: true` to the step if the rest of the automation should still run.
 
 ---
 
 ## **Sample automations**
+
+## Notify via Telegram when WhatsApp fails
+
+```yaml
+- alias: WhatsApp failure to Telegram
+  triggers:
+    - trigger: event
+      event_type: whatsapp_send_failed
+      id: failed
+    - trigger: state
+      entity_id: sensor.whatsapp_default_status
+      to:
+        - disconnected
+        - logged_out
+        - qr_code_required
+        - stopped
+      for:
+        minutes: 5
+      id: status
+  actions:
+    - action: notify.telegram
+      data:
+        message: >-
+          {% if trigger.id == 'failed' %}
+          ⚠️ WhatsApp: {{ trigger.event.data.action }} to {{ trigger.event.data.to }} failed: {{ trigger.event.data.error }}
+          {% else %}
+          ⚠️ WhatsApp client {{ trigger.to_state.attributes.client_id }} is {{ trigger.to_state.state }} ({{ trigger.to_state.attributes.last_error }})
+          {% endif %}
+  mode: queued
+```
 
 ## Ping Pong
 
