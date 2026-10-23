@@ -4,8 +4,10 @@ import logging
 
 from .whatsapp import Whatsapp, WhatsappAddonError
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.typing import ConfigType
 
 DOMAIN = "whatsapp"
@@ -22,6 +24,7 @@ SERVICES = {
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     whatsapp = Whatsapp()
+    hass.data[DOMAIN] = whatsapp
 
     def make_handler(service: str, method_name: str):
         method = getattr(whatsapp, method_name)
@@ -39,5 +42,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     for service, method_name in SERVICES.items():
         hass.services.async_register(DOMAIN, service, make_handler(service, method_name))
+
+    # Status sensor per client (sensor.whatsapp_<client>_status)
+    hass.async_create_task(
+        async_load_platform(hass, Platform.SENSOR, DOMAIN, {}, config)
+    )
 
     return True

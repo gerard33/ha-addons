@@ -30,6 +30,17 @@ class Whatsapp:
 
         return True
 
+    def get_status(self):
+        """Return the status of every client, keyed by client id."""
+        try:
+            response = requests.get(url_normalize(f'{HOST}/status'), timeout=10)
+            # 503 only means not every client is connected; the body is valid
+            return response.json()
+        except (requests.RequestException, ValueError) as err:
+            raise WhatsappAddonError(
+                f'Whatsapp add-on is not reachable: {err}'
+            ) from err
+
     def send_message(self, data):
         return self._post('sendMessage', data)
 

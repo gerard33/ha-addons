@@ -1,3 +1,10 @@
+## 1.6.1
+
+- `sensor.whatsapp_<client>_status` is now a real entity of the custom component with a unique ID, so it can be renamed and managed from the UI (it was created through the API before)
+- The sensor is an enum sensor and checks the add-on every minute; it becomes `stopped` when the add-on is not reachable
+- New event `whatsapp_status_update` with the full status of a client
+- Home Assistant must be restarted once after updating to load the new sensor
+
 ## 1.6.0
 
 - Failed requests are no longer silent: the add-on fires a `whatsapp_send_failed` event, creates a persistent notification and answers with an HTTP error

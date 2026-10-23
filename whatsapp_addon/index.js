@@ -34,29 +34,26 @@ const haPost = (path, data) =>
       logger.warn(`Could not reach Home Assistant (${path}): ${error.message}`)
     );
 
-// Connection status per client, published as sensor.whatsapp_<client>_status
+// Connection status per client. The custom component turns the
+// whatsapp_status_update event into sensor.whatsapp_<client>_status
 const clientStatus = {};
 
-const statusEntityId = (key) =>
-  `sensor.whatsapp_${key.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_status`;
+const statusPayload = (key) => {
+  const status = clientStatus[key];
+  return {
+    clientId: key,
+    state: status.state,
+    since: status.since,
+    last_error: status.lastError ?? null,
+    last_error_at: status.lastErrorAt ?? null,
+    last_sent_at: status.lastSentAt ?? null,
+    failed_count: status.failedCount ?? 0,
+  };
+};
 
 const publishStatus = (key) => {
-  const status = clientStatus[key];
-  if (!status) return;
-
-  return haPost(`states/${statusEntityId(key)}`, {
-    state: status.state,
-    attributes: {
-      friendly_name: `WhatsApp ${key} status`,
-      icon: status.state === "connected" ? "mdi:whatsapp" : "mdi:alert-circle",
-      client_id: key,
-      since: status.since,
-      last_error: status.lastError,
-      last_error_at: status.lastErrorAt,
-      last_sent_at: status.lastSentAt,
-      failed_count: status.failedCount,
-    },
-  });
+  if (!clientStatus[key]) return;
+  return haPost("events/whatsapp_status_update", statusPayload(key));
 };
 
 const setStatus = (key, state, extra = {}) => {
@@ -279,17 +276,18 @@ fs.readFile("data/options.json", function (error, content) {
     )
   );
 
-  // Health check: 200 when every client is connected, 503 otherwise
+  // Status of every client. Also polled by the custom component, so the
+  // sensor is correct after a Home Assistant restart.
+  // HTTP 200 when every client is connected, 503 otherwise.
   app.get("/status", (req, res) => {
-    const allConnected = Object.values(clientStatus).every(
-      (status) => status.state === "connected"
+    const clientIds = Object.keys(clientStatus);
+    const allConnected = clientIds.every(
+      (key) => clientStatus[key].state === "connected"
     );
-    res.status(allConnected ? 200 : 503).json(clientStatus);
+    res
+      .status(allConnected ? 200 : 503)
+      .json(Object.fromEntries(clientIds.map((key) => [key, statusPayload(key)])));
   });
-
-  // Re-publish the status sensors regularly, so they come back after a
-  // Home Assistant restart (sensors set through the API are not persisted)
-  setInterval(() => Object.keys(clientStatus).forEach(publishStatus), 60 * 1000);
 });
 
 const onStop = async () => {
