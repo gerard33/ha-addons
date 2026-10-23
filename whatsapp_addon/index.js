@@ -19,19 +19,145 @@ app.use(bodyParser.json());
 
 const clients = {};
 
-const onReady = (key) => {
-  logger.info(key, "client is ready.");
-  axios.post(
-    "http://supervisor/core/api/services/persistent_notification/dismiss",
-    {
-      notification_id: `whatsapp_addon_qrcode_${key}`,
-    },
-    {
+// ---------------------------------------------------------------------------
+// Home Assistant helpers
+// ---------------------------------------------------------------------------
+
+const haPost = (path, data) =>
+  axios
+    .post(`http://supervisor/core/api/${path}`, data, {
       headers: {
         Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
       },
-    }
-  );
+    })
+    .catch((error) =>
+      logger.warn(`Could not reach Home Assistant (${path}): ${error.message}`)
+    );
+
+// Connection status per client, published as sensor.whatsapp_<client>_status
+const clientStatus = {};
+
+const statusEntityId = (key) =>
+  `sensor.whatsapp_${key.toLowerCase().replace(/[^a-z0-9_]/g, "_")}_status`;
+
+const publishStatus = (key) => {
+  const status = clientStatus[key];
+  if (!status) return;
+
+  return haPost(`states/${statusEntityId(key)}`, {
+    state: status.state,
+    attributes: {
+      friendly_name: `WhatsApp ${key} status`,
+      icon: status.state === "connected" ? "mdi:whatsapp" : "mdi:alert-circle",
+      client_id: key,
+      since: status.since,
+      last_error: status.lastError,
+      last_error_at: status.lastErrorAt,
+      last_sent_at: status.lastSentAt,
+      failed_count: status.failedCount,
+    },
+  });
+};
+
+const setStatus = (key, state, extra = {}) => {
+  const previous = clientStatus[key];
+  clientStatus[key] = {
+    failedCount: 0,
+    ...previous,
+    ...extra,
+    state,
+    since: previous?.state === state ? previous.since : new Date().toISOString(),
+  };
+
+  if (previous?.state !== state) {
+    logger.info(`${key} connection state: ${state}`);
+    haPost("events/whatsapp_connection_update", {
+      clientId: key,
+      state,
+      previous_state: previous?.state ?? null,
+      reason: extra.lastError ?? null,
+    });
+  }
+
+  publishStatus(key);
+};
+
+// Called whenever something could not be sent / executed by the addon
+const reportFailure = (action, key, request, error) => {
+  const message = error?.message || String(error);
+  logger.error(`${action} failed for client ${key ?? "?"}: ${message}`);
+
+  const now = new Date().toISOString();
+  if (key && clientStatus[key]) {
+    clientStatus[key].lastError = message;
+    clientStatus[key].lastErrorAt = now;
+    clientStatus[key].failedCount = (clientStatus[key].failedCount || 0) + 1;
+    publishStatus(key);
+  }
+
+  haPost("events/whatsapp_send_failed", {
+    clientId: key ?? null,
+    action,
+    to: request?.to ?? request?.userId ?? null,
+    error: message,
+    error_type: error?.name ?? "Error",
+    code: error?.code ?? null,
+  });
+
+  haPost("services/persistent_notification/create", {
+    title: "WhatsApp: versturen mislukt",
+    message: `**${action}** via client **${key ?? "?"}** is mislukt` +
+      (request?.to ? ` (naar \`${request.to}\`)` : "") +
+      `.\n\nFout: ${message}\n\nTijd: ${now}`,
+    notification_id: `whatsapp_addon_failure_${key ?? "unknown"}`,
+  });
+};
+
+// Every request goes through here so failures are handled the same way
+const handleRequest = (action, req, res, run) => {
+  const request = req.body || {};
+  const key = request.clientId;
+
+  if (!key) {
+    const error = new Error("Please specify client ID.");
+    reportFailure(action, key, request, error);
+    return res.status(400).send(`KO: ${error.message}`);
+  }
+
+  if (!clients.hasOwnProperty(key)) {
+    const error = new Error(`Client ID '${key}' not found.`);
+    reportFailure(action, key, request, error);
+    return res.status(404).send(`KO: ${error.message}`);
+  }
+
+  Promise.resolve()
+    .then(() => run(clients[key], request))
+    .then(() => {
+      if (action === "Send message") {
+        clientStatus[key].lastSentAt = new Date().toISOString();
+        publishStatus(key);
+      }
+      res.send("OK");
+    })
+    .catch((error) => {
+      reportFailure(action, key, request, error);
+      res.status(500).send(`KO: ${error?.message || error}`);
+    });
+};
+
+const onReady = (key) => {
+  logger.info(key, "client is ready.");
+  haPost("services/persistent_notification/dismiss", {
+    notification_id: `whatsapp_addon_qrcode_${key}`,
+  });
+  setStatus(key, "connected", { lastError: null });
+};
+
+const onDisconnected = (statusCode, key) => {
+  setStatus(key, "disconnected", {
+    lastError: `Connection closed (code ${statusCode ?? "unknown"})`,
+    lastErrorAt: new Date().toISOString(),
+  });
 };
 
 const onQr = (qr, key) => {
@@ -39,6 +165,8 @@ const onQr = (qr, key) => {
     key,
     "require authentication over QRCode, please see your notifications..."
   );
+
+  setStatus(key, "qr_code_required");
 
   var code = qrimage.image(qr, { type: "png" });
 
@@ -88,17 +216,23 @@ const onPresenceUpdate = (presence, key) => {
 
 const onLogout = async (key) => {
   logger.info(`Client ${key} was logged out. Restarting...`);
+  setStatus(key, "logged_out", {
+    lastError: "Logged out by WhatsApp, scan the QR code again.",
+    lastErrorAt: new Date().toISOString(),
+  });
   fs.rm(`/data/${key}`, { recursive: true });
 
   init(key);
 };
 
 const init = (key) => {
+  setStatus(key, "connecting");
   clients[key] = new WhatsappClient({ path: `/data/${key}` });
 
   clients[key].on("restart", () => logger.debug(`${key} client restarting...`));
   clients[key].on("qr", (qr) => onQr(qr, key));
-  clients[key].once("ready", () => onReady(key));
+  clients[key].on("ready", () => onReady(key));
+  clients[key].on("disconnected", (statusCode) => onDisconnected(statusCode, key));
   clients[key].on("msg", (msg) => onMsg(msg, key));
   clients[key].on("logout", () => onLogout(key));
   clients[key].on("presence_update", (presence) =>
@@ -115,131 +249,60 @@ fs.readFile("data/options.json", function (error, content) {
 
   app.listen(port, () => logger.info(`Whatsapp Addon started.`));
 
-  app.post("/sendMessage", (req, res) => {
-    const message = req.body;
-    if (message.hasOwnProperty("clientId")) {
-      if (clients.hasOwnProperty(message.clientId)) {
-        const wapp = clients[message.clientId];
-        wapp
-          .sendMessage(message.to, message.body, message.options)
-          .then(() => {
-            res.send("OK");
-            logger.debug("Message successfully sended from addon.");
-          })
-          .catch((error) => {
-            res.send("KO");
-            logger.error(error.message);
-          });
-      } else {
-        logger.error("Error in sending message. Client ID not found.");
-        res.send("KO");
-      }
-    } else {
-      logger.error("Error in sending message. Please specify client ID.");
-      res.send("KO");
-    }
+  app.post("/sendMessage", (req, res) =>
+    handleRequest("Send message", req, res, (wapp, message) =>
+      wapp.sendMessage(message.to, message.body, message.options)
+    )
+  );
+
+  app.post("/setStatus", (req, res) =>
+    handleRequest("Set status", req, res, (wapp, request) =>
+      wapp.updateProfileStatus(request.status)
+    )
+  );
+
+  app.post("/presenceSubscribe", (req, res) =>
+    handleRequest("Presence subscribe", req, res, (wapp, request) =>
+      wapp.presenceSubscribe(request.userId)
+    )
+  );
+
+  app.post("/sendPresenceUpdate", (req, res) =>
+    handleRequest("Presence update", req, res, (wapp, request) =>
+      wapp.sendPresenceUpdate(request.type, request.to)
+    )
+  );
+
+  app.post("/sendInfinityPresenceUpdate", (req, res) =>
+    handleRequest("Infinity presence update", req, res, (wapp, request) =>
+      wapp.setSendPresenceUpdateInterval(request.type, request.to)
+    )
+  );
+
+  // Health check: 200 when every client is connected, 503 otherwise
+  app.get("/status", (req, res) => {
+    const allConnected = Object.values(clientStatus).every(
+      (status) => status.state === "connected"
+    );
+    res.status(allConnected ? 200 : 503).json(clientStatus);
   });
 
-  app.post("/setStatus", (req, res) => {
-    const status = req.body.status;
-    if (req.body.hasOwnProperty("clientId")) {
-      if (clients.hasOwnProperty(req.body.clientId)) {
-        const wapp = clients[req.body.clientId];
-
-        wapp
-          .updateProfileStatus(status)
-          .then(() => {
-            res.send("OK");
-          })
-          .catch((error) => {
-            res.send("KO");
-            logger.error(error.message);
-          });
-      } else {
-        logger.error("Error in set status. Client ID not found.");
-        res.send("KO");
-      }
-    } else {
-      logger.error("Error in set status. Please specify client ID.");
-      res.send("KO");
-    }
-  });
-
-  app.post("/presenceSubscribe", (req, res) => {
-    const request = req.body;
-
-    if (req.body.hasOwnProperty("clientId")) {
-      if (clients.hasOwnProperty(req.body.clientId)) {
-        const wapp = clients[req.body.clientId];
-
-        wapp
-          .presenceSubscribe(request.userId)
-          .then(() => {
-            res.send("OK");
-          })
-          .catch((error) => {
-            res.send("KO");
-            logger.error(error.message);
-          });
-      } else {
-        logger.error("Error in subscribe presence. Client ID not found.");
-        res.send("KO");
-      }
-    } else {
-      logger.error("Error in subscribe presence. Please specify client ID.");
-      res.send("KO");
-    }
-  });
-
-  app.post("/sendPresenceUpdate", (req, res) => {
-    const request = req.body;
-
-    if (req.body.hasOwnProperty("clientId")) {
-      if (clients.hasOwnProperty(req.body.clientId)) {
-        const wapp = clients[req.body.clientId];
-
-        wapp
-          .sendPresenceUpdate(request.type, request.to)
-          .then(() => {
-            res.send("OK");
-          })
-          .catch((error) => {
-            res.send("KO");
-            logger.error(error.message);
-          });
-      } else {
-        logger.error("Error in presence update. Client ID not found.");
-        res.send("KO");
-      }
-    } else {
-      logger.error("Error in presence update. Please specify client ID.");
-      res.send("KO");
-    }
-  });
-
-  app.post("/sendInfinityPresenceUpdate", (req, res) => {
-    const request = req.body;
-
-    if (req.body.hasOwnProperty("clientId")) {
-      if (clients.hasOwnProperty(req.body.clientId)) {
-        const wapp = clients[req.body.clientId];
-
-        wapp
-          .setSendPresenceUpdateInterval(request.type, request.to)
-          .then(() => {
-            res.send("OK");
-          })
-          .catch((error) => {
-            res.send("KO");
-            logger.error(error.message);
-          });
-      } else {
-        logger.error("Error in presence update. Client ID not found.");
-        res.send("KO");
-      }
-    } else {
-      logger.error("Error in presence update. Please specify client ID.");
-      res.send("KO");
-    }
-  });
+  // Re-publish the status sensors regularly, so they come back after a
+  // Home Assistant restart (sensors set through the API are not persisted)
+  setInterval(() => Object.keys(clientStatus).forEach(publishStatus), 60 * 1000);
 });
+
+const onStop = async () => {
+  logger.info("Whatsapp Addon stopping.");
+  await Promise.all(
+    Object.keys(clientStatus).map((key) => {
+      clientStatus[key].state = "stopped";
+      clientStatus[key].since = new Date().toISOString();
+      return publishStatus(key);
+    })
+  );
+  process.exit(0);
+};
+
+process.on("SIGTERM", onStop);
+process.on("SIGINT", onStop);

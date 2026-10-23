@@ -1,3 +1,12 @@
+## 1.6.0
+
+- Failed requests are no longer silent: the add-on fires a `whatsapp_send_failed` event, creates a persistent notification and answers with an HTTP error
+- `whatsapp.send_message` (and the other services) now raise an error in Home Assistant when the add-on could not send, so the automation trace shows the failure and `continue_on_error` can be used for a fallback
+- New status sensor `sensor.whatsapp_<client>_status` (connecting, connected, disconnected, qr_code_required, logged_out, stopped) with last error and last sent time
+- New `whatsapp_connection_update` event when the connection state changes
+- New health endpoint `GET /status`
+- Fixed: the error handler itself could crash on errors without a status code
+
 ## 1.5.0
 
 - Updated whatsapp library
