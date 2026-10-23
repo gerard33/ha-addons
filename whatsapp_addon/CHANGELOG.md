@@ -1,3 +1,11 @@
+## 1.7.0
+
+- The Whatsapp integration is now set up through the UI (config entry) instead of `whatsapp:` in _configuration.yaml_
+- Existing `whatsapp:` YAML is imported automatically on the first restart; afterwards it can be removed (a repair notice tells you so)
+- The status sensor is now attached to the add-on's _Whatsapp_ device, next to the update entity
+- Existing status sensors keep their entity ID, name and area
+- Actions (`whatsapp.send_message` etc.) are unchanged
+
 ## 1.6.1
 
 - `sensor.whatsapp_<client>_status` is now a real entity of the custom component with a unique ID, so it can be renamed and managed from the UI (it was created through the API before)

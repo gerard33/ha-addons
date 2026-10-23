@@ -89,7 +89,7 @@ data:
 
 ## Status sensor
 
-For every client the custom component creates `sensor.whatsapp_<client>_status` (for example `sensor.whatsapp_default_status`). The sensor has a unique ID, so it can be renamed or moved to an area from the UI.
+For every client the custom component creates `sensor.whatsapp_<client>_status` (for example `sensor.whatsapp_default_status`). The sensor has a unique ID and is attached to the add-on's _Whatsapp_ device, so it can be renamed or moved to an area from the UI.
 
 | State            | Meaning                                         |
 | ---------------- | ----------------------------------------------- |
@@ -102,7 +102,7 @@ For every client the custom component creates `sensor.whatsapp_<client>_status` 
 
 Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`.
 
-The sensor is updated through the `whatsapp_status_update` event and also checks the add-on every minute. When the add-on cannot be reached the state becomes `stopped`. Restart Home Assistant once after updating the add-on to load the sensor.
+The sensor is updated through the `whatsapp_status_update` event and also checks the add-on every minute. When the add-on cannot be reached the state becomes `stopped`. The sensor belongs to the Whatsapp integration (Settings → Devices & services).
 
 ## Failure handling
 
