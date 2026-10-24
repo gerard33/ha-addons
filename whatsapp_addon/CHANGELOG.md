@@ -1,3 +1,7 @@
+## 1.8.1
+
+- Fixed: the add-on did not start since 1.7.1 ("FATAL: Unknown log_level: warn"). The option `log_level` clashed with the log level option of the add-on base image, which does not accept `warn`. It is renamed to `whatsapp_log_level`; an old `log_level` setting is ignored
+
 ## 1.8.0
 
 - Updated the WhatsApp library Baileys from 6.7.12 (bundled copy) to 7.0.0-rc14 (npm). This fixes recipients getting stuck on "Waiting for this message": Baileys now uses the key bundle sent with a retry request, recreates broken sessions and detects changed identity keys before re-sending

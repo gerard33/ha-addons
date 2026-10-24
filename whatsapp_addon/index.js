@@ -234,7 +234,9 @@ const init = (key) => {
 
 fs.readFile("data/options.json", function (error, content) {
   var options = JSON.parse(content);
-  baileysLogLevel = options.log_level || "warn";
+  // Not "log_level": the add-on base image reads that option itself and
+  // stops the container on values it does not know (such as "warn")
+  baileysLogLevel = options.whatsapp_log_level || "warn";
   logger.info(`WhatsApp library log level: ${baileysLogLevel}`);
 
   options.clients.forEach((key) => {
