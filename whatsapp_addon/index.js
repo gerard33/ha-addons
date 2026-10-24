@@ -3,6 +3,18 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
+// libsignal (used by Baileys) logs complete session objects, including
+// private keys, when it opens or closes a session. Keep only the message,
+// so no key material ends up in the add-on log.
+const SESSION_LOG = /^(Closing session|Opening session|Removing old closed session|Session already closed)/;
+for (const method of ["log", "info", "warn"]) {
+  const original = console[method].bind(console);
+  console[method] = (first, ...rest) =>
+    typeof first === "string" && SESSION_LOG.test(first)
+      ? original(first.replace(/:\s*$/, ""))
+      : original(first, ...rest);
+}
+
 const { WhatsappClient } = require("./whatsapp");
 
 var logger = require("log4js").getLogger();

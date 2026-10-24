@@ -93,7 +93,7 @@ data:
 
 ## Status sensor
 
-For every client the custom component creates `sensor.whatsapp_<client>_status` (for example `sensor.whatsapp_default_status`). The sensor has a unique ID and is attached to the add-on's _Whatsapp_ device, so it can be renamed or moved to an area from the UI.
+For every client the custom component creates `sensor.whatsapp_<client>_status` (for example `sensor.whatsapp_default_status`). The sensor has a unique ID and belongs to the _WhatsApp_ device of the integration, which is shown as connected via the add-on's device. It can be renamed or moved to an area from the UI.
 
 | State            | Meaning                                         |
 | ---------------- | ----------------------------------------------- |
