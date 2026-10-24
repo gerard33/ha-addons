@@ -8,7 +8,7 @@ Go to configuration page in clients input box digit the desired clientId. This o
 
 ### **Log level**
 
-The `log_level` option sets the log level of the WhatsApp library (Baileys). The default is `warn`. Set it to `debug` to see what happens with message delivery, for example when a recipient sees "Waiting for this message". `debug` is very verbose, so set it back afterwards.
+The `whatsapp_log_level` option sets the log level of the WhatsApp library (Baileys). The default is `warn`. Set it to `debug` to see what happens with message delivery, for example when a recipient sees "Waiting for this message". `debug` is very verbose, so set it back afterwards.
 
 ### **How to get a User ID**
 
