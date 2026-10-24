@@ -58,6 +58,13 @@ const publishStatus = (key) => {
 
 const setStatus = (key, state, extra = {}) => {
   const previous = clientStatus[key];
+  // Nothing new (e.g. repeated reconnect attempts): do not flood HA
+  if (
+    previous?.state === state &&
+    Object.entries(extra).every(([k, v]) => k.endsWith("At") || previous[k] === v)
+  )
+    return;
+
   clientStatus[key] = {
     failedCount: 0,
     ...previous,

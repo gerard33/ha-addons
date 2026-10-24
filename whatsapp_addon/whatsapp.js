@@ -1,11 +1,11 @@
 const EventEmitter = require("eventemitter2");
 
-const makeWASocket = require("./Baileys").default;
-const {
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-} = require("./Baileys");
+// Baileys 7 is an ES module, so it is loaded with import() once
+let baileys;
+const loadBaileys = async () => (baileys ??= await import("baileys"));
+
+const JID_SUFFIXES = ["@s.whatsapp.net", "@g.us", "@broadcast", "@lid"];
+const hasJidSuffix = (id) => JID_SUFFIXES.some((suffix) => id.endsWith(suffix));
 
 const MessageType = {
   text: "conversation",
@@ -59,6 +59,12 @@ class WhatsappClient extends EventEmitter {
   connect = async () => {
     if (this.#status.connected) return;
 
+    const {
+      default: makeWASocket,
+      fetchLatestBaileysVersion,
+      useMultiFileAuthState,
+    } = await loadBaileys();
+
     const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(this.#path);
 
@@ -107,13 +113,7 @@ class WhatsappClient extends EventEmitter {
     phone = phone.toString();
     if (!phone) throw new Error("Invalid phone");
 
-    return `${phone.replace("+", "")}${
-      !phone.endsWith("@s.whatsapp.net") &&
-      !phone.endsWith("@g.us") &&
-      !phone.endsWith("@broadcast")
-        ? "@s.whatsapp.net"
-        : ""
-    }`;
+    return `${phone.replace("+", "")}${hasJidSuffix(phone) ? "" : "@s.whatsapp.net"}`;
   };
 
   #reconnect = () => {
@@ -123,7 +123,9 @@ class WhatsappClient extends EventEmitter {
       return;
     }
 
-    setTimeout(this.connect, this.#timeout);
+    // Back off when WhatsApp stays unreachable: 1s, 2s, 4s ... max 60s
+    const delay = Math.min(this.#timeout * 2 ** (this.#status.attempt - 1), 60e3);
+    setTimeout(this.connect, delay);
   };
 
   #onConnectionUpdate = (event) => {
@@ -148,7 +150,7 @@ class WhatsappClient extends EventEmitter {
     this.#conn.ev.on("messages.upsert", async ({ messages }) => {
       const msg = messages[0];
 
-      if (msg.hasOwnProperty("message") && !msg.key.fromMe) {
+      if (msg?.message && !msg.key?.fromMe) {
         delete msg.message.messageContextInfo;
         const messageType = Object.keys(msg.message)[0];
         this.emit("msg", { type: messageType, ...msg });
@@ -170,7 +172,7 @@ class WhatsappClient extends EventEmitter {
 
     const statusCode = lastDisconnect?.error?.output?.statusCode;
 
-    if (statusCode === DisconnectReason.loggedOut) {
+    if (statusCode === baileys?.DisconnectReason.loggedOut) {
       this.#status.reconnecting = false;
       this.#status.disconnected = true;
 
@@ -210,14 +212,15 @@ class WhatsappClient extends EventEmitter {
 
     const id = this.#toId(phone);
 
-    const [result] = await this.#conn.onWhatsApp(id);
+    // Full JIDs (also @lid, used by Baileys 7 in incoming messages) are sent
+    // as is; plain phone numbers are checked first
+    let exists = hasJidSuffix(phone);
+    if (!exists) {
+      const [result] = (await this.#conn.onWhatsApp(id)) || [];
+      exists = !!result?.exists;
+    }
 
-    if (
-      result ||
-      phone.endsWith("@s.whatsapp.net") ||
-      phone.endsWith("@g.us") ||
-      phone.endsWith("@broadcast")
-    ) {
+    if (exists) {
       try {
         const result = await this.#conn.sendMessage(id, msg, options);
         if (result?.key?.id && result.message) {
@@ -259,9 +262,13 @@ class WhatsappClient extends EventEmitter {
 
     const id = this.#toId(phone);
 
-    const [result] = await this.#conn.onWhatsApp(id);
+    let exists = id.endsWith("@lid");
+    if (!exists) {
+      const [result] = (await this.#conn.onWhatsApp(id)) || [];
+      exists = !!result?.exists;
+    }
 
-    if (result) {
+    if (exists) {
       try {
         await this.#conn.presenceSubscribe(id);
       } catch (err) {

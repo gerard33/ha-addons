@@ -1,3 +1,12 @@
+## 1.8.0
+
+- Updated the WhatsApp library Baileys from 6.7.12 (bundled copy) to 7.0.0-rc14 (npm). This fixes recipients getting stuck on "Waiting for this message": Baileys now uses the key bundle sent with a retry request, recreates broken sessions and detects changed identity keys before re-sending
+- Messages can be sent to `@lid` IDs (used by WhatsApp in incoming messages)
+- Reconnecting backs off (1s, 2s, 4s ... up to 60s) when WhatsApp is unreachable, and repeated identical status updates are no longer sent to Home Assistant
+- Smaller image, no native modules (also builds on armhf, armv7 and i386)
+- Images are sent without a thumbnail (no image library); the image itself is unchanged
+- Make a backup before updating: the existing link is kept, but if WhatsApp asks for a new QR code, restore the backup or scan again
+
 ## 1.7.1
 
 - Fixed: the add-on crashed when a WhatsApp message or presence update arrived while Home Assistant was unreachable (for example during a restart)
