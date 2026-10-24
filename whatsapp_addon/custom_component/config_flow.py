@@ -6,7 +6,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
 from .const import DOMAIN
-from .whatsapp import WhatsappAddonError
+from .whatsapp import Whatsapp, WhatsappAddonError
 
 TITLE = "WhatsApp"
 
@@ -25,9 +25,9 @@ class WhatsappConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                await self.hass.async_add_executor_job(
-                    self.hass.data[DOMAIN].get_status
-                )
+                # Not hass.data: on a fresh install the integration is not
+                # set up yet while this flow runs
+                await self.hass.async_add_executor_job(Whatsapp().get_status)
             except WhatsappAddonError:
                 errors["base"] = "cannot_connect"
             else:

@@ -1,3 +1,11 @@
+## 1.7.1
+
+- Fixed: the add-on crashed when a WhatsApp message or presence update arrived while Home Assistant was unreachable (for example during a restart)
+- Fixed: after being logged out by WhatsApp, removing the old session failed, so no new QR code was shown
+- Fixed: adding the integration through the UI on a fresh install failed
+- New option `log_level` for the WhatsApp library (Baileys), default `warn`; use `debug` to troubleshoot delivery problems
+- The reason of a disconnect is now written to the log
+
 ## 1.7.0
 
 - The Whatsapp integration is now set up through the UI (config entry) instead of `whatsapp:` in _configuration.yaml_

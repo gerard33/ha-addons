@@ -27,6 +27,7 @@ class WhatsappClient extends EventEmitter {
   #attempts;
   #offline;
   #refreshMs;
+  #logLevel;
 
   #status = {
     attempt: 0,
@@ -43,6 +44,7 @@ class WhatsappClient extends EventEmitter {
     attempts = Infinity,
     offline = true,
     refreshMs,
+    logLevel = "warn",
   }) {
     super();
     this.#path = path;
@@ -50,6 +52,7 @@ class WhatsappClient extends EventEmitter {
     this.#attempts = attempts;
     this.#offline = offline;
     this.#refreshMs = refreshMs || this.#toMilliseconds(6, 0, 0);
+    this.#logLevel = logLevel;
     this.connect();
   }
 
@@ -64,7 +67,7 @@ class WhatsappClient extends EventEmitter {
       auth: state,
       syncFullHistory: false,
       markOnlineOnConnect: !this.#offline,
-      logger: require("pino")({ level: "silent" }),
+      logger: require("pino")({ level: this.#logLevel }),
       generateHighQualityLinkPreview: true,
       browser: ["Ubuntu", "Chrome", "20.0.04"],
       defaultQueryTimeoutMs: undefined,
