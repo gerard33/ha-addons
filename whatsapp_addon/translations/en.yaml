@@ -3,3 +3,8 @@ configuration:
   clients:
     name: Clients
     description: Create other clients
+  log_level:
+    name: Log level
+    description: >-
+      Log level of the WhatsApp library (Baileys). Use debug to troubleshoot
+      delivery problems, such as messages stuck on "Waiting for this message".

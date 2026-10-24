@@ -67,7 +67,10 @@ const setStatus = (key, state, extra = {}) => {
   };
 
   if (previous?.state !== state) {
-    logger.info(`${key} connection state: ${state}`);
+    logger.info(
+      `${key} connection state: ${state}` +
+        (extra.lastError ? ` (${extra.lastError})` : "")
+    );
     haPost("events/whatsapp_connection_update", {
       clientId: key,
       state,
@@ -169,45 +172,21 @@ const onQr = (qr, key) => {
 
   code.on("readable", function () {
     var img_string = code.read().toString("base64");
-    axios.post(
-      "http://supervisor/core/api/services/persistent_notification/create",
-      {
-        title: `Whatsapp QRCode (${key})`,
-        message: `Please scan the following QRCode for **${key}** client... ![QRCode](data:image/png;base64,${img_string})`,
-        notification_id: `whatsapp_addon_qrcode_${key}`,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
-        },
-      }
-    );
+    haPost("services/persistent_notification/create", {
+      title: `Whatsapp QRCode (${key})`,
+      message: `Please scan the following QRCode for **${key}** client... ![QRCode](data:image/png;base64,${img_string})`,
+      notification_id: `whatsapp_addon_qrcode_${key}`,
+    });
   });
 };
 
 const onMsg = (msg, key) => {
-  axios.post(
-    "http://supervisor/core/api/events/new_whatsapp_message",
-    { clientId: key, ...msg },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
-      },
-    }
-  );
+  haPost("events/new_whatsapp_message", { clientId: key, ...msg });
   logger.debug(`New message event fired from ${key}.`);
 };
 
 const onPresenceUpdate = (presence, key) => {
-  axios.post(
-    "http://supervisor/core/api/events/whatsapp_presence_update",
-    { clientId: key, ...presence },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
-      },
-    }
-  );
+  haPost("events/whatsapp_presence_update", { clientId: key, ...presence });
   logger.debug(`New presence event fired from ${key}.`);
 };
 
@@ -217,14 +196,23 @@ const onLogout = async (key) => {
     lastError: "Logged out by WhatsApp, scan the QR code again.",
     lastErrorAt: new Date().toISOString(),
   });
-  fs.rm(`/data/${key}`, { recursive: true });
+  try {
+    fs.rmSync(`/data/${key}`, { recursive: true, force: true });
+  } catch (error) {
+    logger.error(`Could not remove session of ${key}: ${error.message}`);
+  }
 
   init(key);
 };
 
+let baileysLogLevel = "warn";
+
 const init = (key) => {
   setStatus(key, "connecting");
-  clients[key] = new WhatsappClient({ path: `/data/${key}` });
+  clients[key] = new WhatsappClient({
+    path: `/data/${key}`,
+    logLevel: baileysLogLevel,
+  });
 
   clients[key].on("restart", () => logger.debug(`${key} client restarting...`));
   clients[key].on("qr", (qr) => onQr(qr, key));
@@ -239,6 +227,8 @@ const init = (key) => {
 
 fs.readFile("data/options.json", function (error, content) {
   var options = JSON.parse(content);
+  baileysLogLevel = options.log_level || "warn";
+  logger.info(`WhatsApp library log level: ${baileysLogLevel}`);
 
   options.clients.forEach((key) => {
     init(key);
@@ -304,3 +294,8 @@ const onStop = async () => {
 
 process.on("SIGTERM", onStop);
 process.on("SIGINT", onStop);
+
+// Safety net: never let a stray promise rejection stop the add-on
+process.on("unhandledRejection", (reason) => {
+  logger.error(`Unhandled error: ${reason?.stack || reason}`);
+});
