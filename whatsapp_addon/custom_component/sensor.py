@@ -32,19 +32,73 @@ ATTRIBUTES = ["since", "last_error", "last_error_at", "last_sent_at", "failed_co
 _LOGGER = logging.getLogger(__name__)
 
 
-def _device_info(hass: HomeAssistant) -> DeviceInfo:
-    """Attach to the add-on's Supervisor device, or create our own device."""
-    addon_identifier = (HASSIO_DOMAIN, ADDON_SLUG)
-    if dr.async_get(hass).async_get_device(identifiers={addon_identifier}):
-        return DeviceInfo(identifiers={addon_identifier})
+OWN_IDENTIFIER = (DOMAIN, ADDON_SLUG)
+ADDON_IDENTIFIER = (HASSIO_DOMAIN, ADDON_SLUG)
 
-    # No Supervisor device (e.g. Supervisor integration not loaded)
-    return DeviceInfo(
-        identifiers={(DOMAIN, ADDON_SLUG)},
-        name="Whatsapp",
+
+def _find_addon_device(hass: HomeAssistant) -> dr.DeviceEntry | None:
+    """Return the add-on's device created by the Supervisor integration."""
+    dev_reg = dr.async_get(hass)
+    if hasattr(dev_reg, "async_get_devices"):
+        # HA 2026.8+: identifiers are only unique per config entry
+        for device in dev_reg.async_get_devices(identifiers={ADDON_IDENTIFIER}):
+            owner = hass.config_entries.async_get_entry(device.config_entry_id)
+            if owner is not None and owner.domain == HASSIO_DOMAIN:
+                return device
+        return None
+    return dev_reg.async_get_device(identifiers={ADDON_IDENTIFIER})
+
+
+def _owned_only_by(device: dr.DeviceEntry, entry_id: str) -> bool:
+    if hasattr(device, "config_entry_id"):  # HA 2026.8+: one entry per device
+        return device.config_entry_id == entry_id
+    return set(device.config_entries) == {entry_id}
+
+
+@callback
+def _migrate_device(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Give a device created by 1.7.x/1.8.x our own identifier.
+
+    1.7.0 attached the sensor to the add-on device by using its Supervisor
+    identifier. Since HA 2026.8 a device belongs to one config entry, so that
+    created a second device with the Supervisor identifier for this entry.
+    Re-key it (keeps the device id, area and entity), so it does not clash.
+    """
+    dev_reg = dr.async_get(hass)
+    devices = dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+    if any(OWN_IDENTIFIER in device.identifiers for device in devices):
+        return
+    for device in devices:
+        if ADDON_IDENTIFIER in device.identifiers and _owned_only_by(
+            device, entry.entry_id
+        ):
+            _LOGGER.debug("Migrating device %s to own identifier", device.id)
+            dev_reg.async_update_device(
+                device.id, new_identifiers={OWN_IDENTIFIER}
+            )
+            return
+
+
+def _device_info(hass: HomeAssistant) -> DeviceInfo:
+    """Own device, shown as connected via the add-on's Supervisor device.
+
+    Entities cannot be added to a device of another integration (since HA
+    2026.8 a device belongs to exactly one config entry), so the add-on device
+    is linked as via device instead.
+    """
+    info = DeviceInfo(
+        identifiers={OWN_IDENTIFIER},
+        name="WhatsApp",
         manufacturer="WhatsApp add-on",
+        model="Baileys",
         entry_type=DeviceEntryType.SERVICE,
     )
+    if (addon_device := _find_addon_device(hass)) is not None:
+        if "via_device_id" in DeviceInfo.__annotations__:  # HA 2026.8+
+            info["via_device_id"] = addon_device.id
+        else:
+            info["via_device"] = ADDON_IDENTIFIER
+    return info
 
 
 async def async_setup_entry(
@@ -53,6 +107,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     whatsapp = hass.data[DOMAIN]
+    _migrate_device(hass, entry)
     device_info = _device_info(hass)
     sensors: dict[str, WhatsappStatusSensor] = {}
 
@@ -110,9 +165,10 @@ class WhatsappStatusSensor(SensorEntity):
     def __init__(self, client_id: str, device_info: DeviceInfo) -> None:
         self._client_id = client_id
         self._attr_unique_id = f"whatsapp_{slugify(client_id)}_status"
-        # Full name (not has_entity_name), so the entity ID stays
-        # sensor.whatsapp_<client>_status
-        self._attr_name = f"WhatsApp {client_id} status"
+        # Device "WhatsApp" + "<client> status" gives the friendly name
+        # "WhatsApp default status" and entity ID sensor.whatsapp_<client>_status
+        self._attr_has_entity_name = True
+        self._attr_name = f"{client_id} status"
         self._attr_device_info = device_info
         self._attr_extra_state_attributes = {"client_id": client_id}
 

@@ -1,3 +1,10 @@
+## 1.8.2
+
+- Fixed for Home Assistant 2026.8 and newer: a device now belongs to one integration, so the status sensor could no longer be added to the add-on's device and ended up on a second, unnamed device. The integration now has its own _WhatsApp_ device, linked to the add-on's device as "connected via". The device created by 1.7.x/1.8.x is converted (same device, area kept)
+- Replaced the deprecated `device_registry.async_get_device` (stops working in Home Assistant 2027.8)
+- Entity name uses the device name: friendly name stays "WhatsApp default status", entity ID unchanged
+- The add-on log no longer contains complete Signal session objects with private keys ("Closing session: SessionEntry {...}"); only the message is kept
+
 ## 1.8.1
 
 - Fixed: the add-on did not start since 1.7.1 ("FATAL: Unknown log_level: warn"). The option `log_level` clashed with the log level option of the add-on base image, which does not accept `warn`. It is renamed to `whatsapp_log_level`; an old `log_level` setting is ignored
