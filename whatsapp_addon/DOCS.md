@@ -85,7 +85,7 @@ data:
 
 | Event type               | Description                           |
 | ------------------------ | ------------------------------------- |
-| new_whatsapp_message     | The message that was received         |
+| new_whatsapp_message     | The message that was received (status updates and channels are not forwarded) |
 | whatsapp_presence_update | Presence of contact in a chat updated |
 | whatsapp_send_failed     | A message (or other request) could not be sent. Data: `clientId`, `action`, `to`, `error`, `error_type`, `code` |
 | whatsapp_connection_update | Connection state of a client changed. Data: `clientId`, `state`, `previous_state`, `reason` |

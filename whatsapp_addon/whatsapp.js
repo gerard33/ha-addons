@@ -63,6 +63,8 @@ class WhatsappClient extends EventEmitter {
       default: makeWASocket,
       fetchLatestBaileysVersion,
       useMultiFileAuthState,
+      isJidStatusBroadcast,
+      isJidNewsletter,
     } = await loadBaileys();
 
     const { version } = await fetchLatestBaileysVersion();
@@ -78,6 +80,12 @@ class WhatsappClient extends EventEmitter {
       browser: ["Ubuntu", "Chrome", "20.0.04"],
       defaultQueryTimeoutMs: undefined,
       getMessage: async (key) => this.#msgStore.get(key.id),
+      // Status updates (stories) and channels are not used by the add-on.
+      // Ignoring them also stops decrypt failures on statuses, which made
+      // Baileys ask the phone to resend them ("sync successful" on the
+      // phone) after every reconnect.
+      shouldIgnoreJid: (jid) =>
+        !!jid && (isJidStatusBroadcast(jid) || isJidNewsletter(jid)),
     });
 
     this.#conn.ev.on("creds.update", (state) => {

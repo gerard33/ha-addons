@@ -1,3 +1,7 @@
+## 1.8.3
+
+- Status updates (stories of contacts) and channels are now ignored. Status updates that could not be decrypted made the WhatsApp library ask the phone to resend them, which showed up as "sync successful" notifications on the phone after (re)connecting. They are also no longer sent as `new_whatsapp_message` events
+
 ## 1.8.2
 
 - Fixed for Home Assistant 2026.8 and newer: a device now belongs to one integration, so the status sensor could no longer be added to the add-on's device and ended up on a second, unnamed device. The integration now has its own _WhatsApp_ device, linked to the add-on's device as "connected via". The device created by 1.7.x/1.8.x is converted (same device, area kept)
