@@ -1,4 +1,6 @@
-ARG BUILD_FROM
+# Multi-arch base image; Docker picks the right architecture (build.yaml is
+# deprecated by the Supervisor)
+ARG BUILD_FROM=ghcr.io/hassio-addons/base:17.1.0
 FROM ${BUILD_FROM}
 
 RUN apk add --no-cache nodejs npm
