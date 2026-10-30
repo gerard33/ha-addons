@@ -1,3 +1,10 @@
+## 1.9.0
+
+- Removed deprecated settings reported by the Supervisor:
+  - `build.yaml` is gone; the base image is now set in the Dockerfile (same image as before)
+  - Home Assistant's configuration is mapped with `homeassistant_config` (at `/homeassistant`) instead of the deprecated `config`
+  - Only `aarch64` and `amd64` are supported; Home Assistant has deprecated `armhf`, `armv7` and `i386`. Installations on those systems keep the current version but get no more updates
+
 ## 1.8.3
 
 - Status updates (stories of contacts) and channels are now ignored. Status updates that could not be decrypted made the WhatsApp library ask the phone to resend them, which showed up as "sync successful" notifications on the phone after (re)connecting. They are also no longer sent as `new_whatsapp_message` events
