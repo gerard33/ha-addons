@@ -110,7 +110,9 @@ The sensor is updated through the `whatsapp_status_update` event and also checks
 
 ## Failure handling
 
-When the add-on cannot send a message, `whatsapp.send_message` fails with an error (visible in the automation trace and the Home Assistant log). Add `continue_on_error: true` to the step if the rest of the automation should still run.
+WhatsApp closes the connection now and then; the add-on reconnects within a few seconds. A request that arrives while the add-on is reconnecting waits up to 15 seconds for the connection instead of failing straight away. When the connection drops during a send (WhatsApp error 408, 428, 503 or 515), the request is retried once after the reconnect. Other errors, such as a number that is not on WhatsApp, are not retried.
+
+When the add-on still cannot send a message, `whatsapp.send_message` fails with an error (visible in the automation trace and the Home Assistant log). Add `continue_on_error: true` to the step if the rest of the automation should still run.
 
 ---
 

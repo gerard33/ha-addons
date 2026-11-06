@@ -1,3 +1,10 @@
+## 1.9.1
+
+- Messages are no longer lost during the short reconnects (a few seconds, several times a day, usually WhatsApp error 428 after a failed keep-alive). A request that arrives while the add-on is reconnecting now waits up to 15 seconds for the connection instead of failing straight away
+- When the connection drops during a send (WhatsApp error 408, 428, 503 or 515), the request is retried once after the reconnect. Other errors are not retried
+- Applies to all services (`send_message`, `set_status`, `presence_subscribe`, `send_presence_update`, `send_infinity_presence_update`); no changes needed in automations
+- When the connection does not come back within 15 seconds, the request fails as before (error, `whatsapp_send_failed` event and notification)
+
 ## 1.9.0
 
 - Removed deprecated settings reported by the Supervisor:

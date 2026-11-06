@@ -102,6 +102,34 @@ class WhatsappClient extends EventEmitter {
     this.#conn.ev.on("connection.update", this.#onConnectionUpdate);
   };
 
+  get isConnected() {
+    return this.#status.connected && !this.#status.disconnected;
+  }
+
+  // Resolves as soon as the client is connected (again). With fresh=true it
+  // waits for the next reconnect, also when the client still looks connected
+  // (after a failed send, the dropped connection is not always noticed yet).
+  // Rejects after timeoutMs, on logout, or when the client has given up.
+  waitUntilConnected = (timeoutMs, { fresh = false } = {}) => {
+    if (!fresh && this.isConnected) return Promise.resolve();
+    if (this.#status.disconnected || timeoutMs <= 0)
+      return Promise.reject(new WhatsappDisconnectedError());
+
+    return new Promise((resolve, reject) => {
+      const finish = (callback) => {
+        clearTimeout(timer);
+        this.off("ready", onReady);
+        this.off("logout", onGone);
+        callback();
+      };
+      const onReady = () => finish(resolve);
+      const onGone = () => finish(() => reject(new WhatsappDisconnectedError()));
+      const timer = setTimeout(onGone, timeoutMs);
+      this.on("ready", onReady);
+      this.on("logout", onGone);
+    });
+  };
+
   disconnect = (reconnect) => {
     if (this.#status.disconnected) return;
 
@@ -351,4 +379,11 @@ class WhatsappError extends Error {
   }
 }
 
-module.exports = { WhatsappClient, MessageType };
+// Errors that mean the connection dropped, not that the request was wrong:
+// worth one retry after the client has reconnected
+const CONNECTION_ERROR_CODES = [408, 428, 503, 515];
+const isConnectionError = (err) =>
+  err?.name === "WhatsappDisconnectedError" ||
+  (err?.name === "WhatsappError" && CONNECTION_ERROR_CODES.includes(err.code));
+
+module.exports = { WhatsappClient, MessageType, isConnectionError };

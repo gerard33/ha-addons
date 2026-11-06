@@ -16,6 +16,7 @@ for (const method of ["log", "info", "warn"]) {
 }
 
 const { WhatsappClient } = require("./whatsapp");
+const { runWhenConnected } = require("./reconnect");
 
 var logger = require("log4js").getLogger();
 logger.level = "info";
@@ -149,8 +150,10 @@ const handleRequest = (action, req, res, run) => {
     return res.status(404).send(`KO: ${error.message}`);
   }
 
-  Promise.resolve()
-    .then(() => run(clients[key], request))
+  const wapp = clients[key];
+  runWhenConnected(wapp, () => run(wapp, request), {
+    log: (message) => logger.info(`${action} (${key}): ${message}`),
+  })
     .then(() => {
       if (action === "Send message") {
         clientStatus[key].lastSentAt = new Date().toISOString();
