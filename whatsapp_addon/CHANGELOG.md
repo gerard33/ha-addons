@@ -1,3 +1,12 @@
+## 1.9.1
+
+- Messages are no longer lost during the short reconnects (a few seconds, several times a day, usually WhatsApp error 428 after a failed keep-alive). A request that arrives while the add-on is reconnecting now waits up to 15 seconds for the connection instead of failing straight away
+- When the connection drops during a send (WhatsApp error 408, 428, 503 or 515), the request is retried once after the reconnect. Other errors are not retried
+- Applies to all services (`send_message`, `set_status`, `presence_subscribe`, `send_presence_update`, `send_infinity_presence_update`); no changes needed in automations
+- When the connection does not come back within 15 seconds, the request fails as before (error, `whatsapp_send_failed` event and notification)
+- Every disconnect is now explained in the log, e.g. `default disconnect details: code 428 "Connection Terminated", closed by network (no close frame) (ws 1006), connected 14m58s, last data from WhatsApp 21.4s ago, server 157.240.x.x:443, local port 51234`. _closed by network_ means the connection was dropped without WhatsApp closing it (router, firewall, NAT, VPN, host); _closed by whatsapp_ means WhatsApp ended it
+- The same details are in the new `last_disconnect` attribute of the status sensor and in the `details` field of the `whatsapp_connection_update` event, so the disconnects can be analysed in Home Assistant (integration 1.3.1, restart Home Assistant once after updating)
+
 ## 1.9.0
 
 - Removed deprecated settings reported by the Supervisor:

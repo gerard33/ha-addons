@@ -16,6 +16,7 @@ for (const method of ["log", "info", "warn"]) {
 }
 
 const { WhatsappClient } = require("./whatsapp");
+const { runWhenConnected } = require("./reconnect");
 
 var logger = require("log4js").getLogger();
 logger.level = "info";
@@ -60,6 +61,7 @@ const statusPayload = (key) => {
     last_error_at: status.lastErrorAt ?? null,
     last_sent_at: status.lastSentAt ?? null,
     failed_count: status.failedCount ?? 0,
+    last_disconnect: status.lastDisconnect ?? null,
   };
 };
 
@@ -73,7 +75,7 @@ const setStatus = (key, state, extra = {}) => {
   // Nothing new (e.g. repeated reconnect attempts): do not flood HA
   if (
     previous?.state === state &&
-    Object.entries(extra).every(([k, v]) => k.endsWith("At") || previous[k] === v)
+    Object.entries(extra).every(([k, v]) => k.endsWith("At") || k === "lastDisconnect" || previous[k] === v)
   )
     return;
 
@@ -95,6 +97,7 @@ const setStatus = (key, state, extra = {}) => {
       state,
       previous_state: previous?.state ?? null,
       reason: extra.lastError ?? null,
+      ...(state === "disconnected" ? { details: extra.lastDisconnect ?? null } : {}),
     });
   }
 
@@ -149,8 +152,10 @@ const handleRequest = (action, req, res, run) => {
     return res.status(404).send(`KO: ${error.message}`);
   }
 
-  Promise.resolve()
-    .then(() => run(clients[key], request))
+  const wapp = clients[key];
+  runWhenConnected(wapp, () => run(wapp, request), {
+    log: (message) => logger.info(`${action} (${key}): ${message}`),
+  })
     .then(() => {
       if (action === "Send message") {
         clientStatus[key].lastSentAt = new Date().toISOString();
@@ -172,10 +177,25 @@ const onReady = (key) => {
   setStatus(key, "connected", { lastError: null });
 };
 
-const onDisconnected = (statusCode, key) => {
+const formatSeconds = (s) =>
+  s == null ? "?" : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
+
+const onDisconnected = (statusCode, key, details = {}) => {
+  // One line per disconnect with everything needed to find the cause
+  logger.info(
+    `${key} disconnect details: code ${statusCode ?? "?"} "${details.reason ?? "?"}", ` +
+      `closed by ${details.closed_by ?? "?"}` +
+      (details.ws_close_code ? ` (ws ${details.ws_close_code}${details.ws_close_reason ? ` ${details.ws_close_reason}` : ""})` : "") +
+      (details.socket_error ? `, socket error ${details.socket_error}` : "") +
+      `, connected ${formatSeconds(details.connected_seconds)}` +
+      `, last data from WhatsApp ${formatSeconds(details.last_received_seconds)} ago` +
+      (details.remote ? `, server ${details.remote}, local port ${details.local_port}` : "")
+  );
+
   setStatus(key, "disconnected", {
     lastError: `Connection closed (code ${statusCode ?? "unknown"})`,
     lastErrorAt: new Date().toISOString(),
+    lastDisconnect: { code: statusCode ?? null, ...details },
   });
 };
 
@@ -236,7 +256,9 @@ const init = (key) => {
   clients[key].on("restart", () => logger.debug(`${key} client restarting...`));
   clients[key].on("qr", (qr) => onQr(qr, key));
   clients[key].on("ready", () => onReady(key));
-  clients[key].on("disconnected", (statusCode) => onDisconnected(statusCode, key));
+  clients[key].on("disconnected", (statusCode, details) =>
+    onDisconnected(statusCode, key, details)
+  );
   clients[key].on("msg", (msg) => onMsg(msg, key));
   clients[key].on("logout", () => onLogout(key));
   clients[key].on("presence_update", (presence) =>

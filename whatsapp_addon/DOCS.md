@@ -104,13 +104,17 @@ For every client the custom component creates `sensor.whatsapp_<client>_status` 
 | logged_out       | Removed as linked device, scan the QR code again |
 | stopped          | Add-on was stopped                              |
 
-Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`.
+Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`, `last_disconnect`.
+
+`last_disconnect` describes the last disconnect: `code`, `reason`, `closed_by` (`network (no close frame)` when the connection was dropped on the way, `whatsapp (...)` when WhatsApp closed it), `ws_close_code`, `ws_close_reason`, `socket_error`, `connected_seconds` (how long the connection was up), `last_received_seconds` (how long before the disconnect WhatsApp last sent something), `remote` (WhatsApp server) and `local_port`. The add-on also logs one `disconnect details` line per disconnect, and the `whatsapp_connection_update` event carries the same data in `details`.
 
 The sensor is updated through the `whatsapp_status_update` event and also checks the add-on every minute. When the add-on cannot be reached the state becomes `stopped`. The sensor belongs to the Whatsapp integration (Settings → Devices & services).
 
 ## Failure handling
 
-When the add-on cannot send a message, `whatsapp.send_message` fails with an error (visible in the automation trace and the Home Assistant log). Add `continue_on_error: true` to the step if the rest of the automation should still run.
+WhatsApp closes the connection now and then; the add-on reconnects within a few seconds. A request that arrives while the add-on is reconnecting waits up to 15 seconds for the connection instead of failing straight away. When the connection drops during a send (WhatsApp error 408, 428, 503 or 515), the request is retried once after the reconnect. Other errors, such as a number that is not on WhatsApp, are not retried.
+
+When the add-on still cannot send a message, `whatsapp.send_message` fails with an error (visible in the automation trace and the Home Assistant log). Add `continue_on_error: true` to the step if the rest of the automation should still run.
 
 ---
 

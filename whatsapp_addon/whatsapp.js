@@ -28,6 +28,8 @@ class WhatsappClient extends EventEmitter {
   #offline;
   #refreshMs;
   #logLevel;
+  // Details of the current WebSocket, to explain why it was closed
+  #diag = {};
 
   #status = {
     attempt: 0,
@@ -100,6 +102,86 @@ class WhatsappClient extends EventEmitter {
     });
 
     this.#conn.ev.on("connection.update", this.#onConnectionUpdate);
+    this.#watchSocket(this.#conn.ws);
+  };
+
+  // Records what happens on the WebSocket, so a disconnect can be explained:
+  // who closed it (WhatsApp or the network), how long it was open and when
+  // WhatsApp last sent something
+  #watchSocket = (ws) => {
+    const diag = (this.#diag = { startedAt: Date.now() });
+
+    ws.on("open", () => {
+      diag.openedAt = Date.now();
+      const tcp = ws.socket?._socket;
+      if (tcp) {
+        diag.remote = `${tcp.remoteAddress}:${tcp.remotePort}`;
+        diag.localPort = tcp.localPort;
+      }
+    });
+    ws.on("message", () => (diag.lastReceivedAt = Date.now()));
+    ws.on("pong", () => (diag.lastReceivedAt = Date.now()));
+    ws.on("CB:xmlstreamend", () => (diag.serverEndedStream = true));
+    ws.on("error", (err) => (diag.socketError = err?.code || err?.message));
+    ws.on("close", (code, reason) => {
+      diag.closedAt = Date.now();
+      diag.closeCode = code;
+      diag.closeReason = reason?.toString() || undefined;
+    });
+  };
+
+  #disconnectDetails = (lastDisconnect) => {
+    const d = this.#diag;
+    const now = Date.now();
+    const seconds = (from) => (from ? Math.round((now - from) / 100) / 10 : null);
+    // RFC 6455: 1006 = closed without a close frame (connection dropped),
+    // 1000/1001 = closed normally by the other side
+    const closedBy = d.serverEndedStream
+      ? "whatsapp (stream end)"
+      : d.closeCode === 1006
+        ? "network (no close frame)"
+        : d.closeCode
+          ? `whatsapp (close code ${d.closeCode})`
+          : "add-on";
+    return {
+      reason: lastDisconnect?.error?.message ?? null,
+      closed_by: closedBy,
+      ws_close_code: d.closeCode ?? null,
+      ws_close_reason: d.closeReason ?? null,
+      socket_error: d.socketError ?? null,
+      connected_seconds: seconds(d.openedAt),
+      last_received_seconds: seconds(d.lastReceivedAt),
+      remote: d.remote ?? null,
+      local_port: d.localPort ?? null,
+    };
+  };
+
+  get isConnected() {
+    return this.#status.connected && !this.#status.disconnected;
+  }
+
+  // Resolves as soon as the client is connected (again). With fresh=true it
+  // waits for the next reconnect, also when the client still looks connected
+  // (after a failed send, the dropped connection is not always noticed yet).
+  // Rejects after timeoutMs, on logout, or when the client has given up.
+  waitUntilConnected = (timeoutMs, { fresh = false } = {}) => {
+    if (!fresh && this.isConnected) return Promise.resolve();
+    if (this.#status.disconnected || timeoutMs <= 0)
+      return Promise.reject(new WhatsappDisconnectedError());
+
+    return new Promise((resolve, reject) => {
+      const finish = (callback) => {
+        clearTimeout(timer);
+        this.off("ready", onReady);
+        this.off("logout", onGone);
+        callback();
+      };
+      const onReady = () => finish(resolve);
+      const onGone = () => finish(() => reject(new WhatsappDisconnectedError()));
+      const timer = setTimeout(onGone, timeoutMs);
+      this.on("ready", onReady);
+      this.on("logout", onGone);
+    });
   };
 
   disconnect = (reconnect) => {
@@ -188,7 +270,7 @@ class WhatsappClient extends EventEmitter {
       return;
     }
 
-    this.emit("disconnected", statusCode);
+    this.emit("disconnected", statusCode, this.#disconnectDetails(lastDisconnect));
     this.#reconnect();
   };
 
@@ -351,4 +433,11 @@ class WhatsappError extends Error {
   }
 }
 
-module.exports = { WhatsappClient, MessageType };
+// Errors that mean the connection dropped, not that the request was wrong:
+// worth one retry after the client has reconnected
+const CONNECTION_ERROR_CODES = [408, 428, 503, 515];
+const isConnectionError = (err) =>
+  err?.name === "WhatsappDisconnectedError" ||
+  (err?.name === "WhatsappError" && CONNECTION_ERROR_CODES.includes(err.code));
+
+module.exports = { WhatsappClient, MessageType, isConnectionError };
