@@ -104,7 +104,9 @@ For every client the custom component creates `sensor.whatsapp_<client>_status` 
 | logged_out       | Removed as linked device, scan the QR code again |
 | stopped          | Add-on was stopped                              |
 
-Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`.
+Attributes: `since`, `last_error`, `last_error_at`, `last_sent_at`, `failed_count`, `last_disconnect`.
+
+`last_disconnect` describes the last disconnect: `code`, `reason`, `closed_by` (`network (no close frame)` when the connection was dropped on the way, `whatsapp (...)` when WhatsApp closed it), `ws_close_code`, `ws_close_reason`, `socket_error`, `connected_seconds` (how long the connection was up), `last_received_seconds` (how long before the disconnect WhatsApp last sent something), `remote` (WhatsApp server) and `local_port`. The add-on also logs one `disconnect details` line per disconnect, and the `whatsapp_connection_update` event carries the same data in `details`.
 
 The sensor is updated through the `whatsapp_status_update` event and also checks the add-on every minute. When the add-on cannot be reached the state becomes `stopped`. The sensor belongs to the Whatsapp integration (Settings → Devices & services).
 

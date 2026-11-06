@@ -27,7 +27,14 @@ STATES = [
     "stopped",
 ]
 
-ATTRIBUTES = ["since", "last_error", "last_error_at", "last_sent_at", "failed_count"]
+ATTRIBUTES = [
+    "since",
+    "last_error",
+    "last_error_at",
+    "last_sent_at",
+    "failed_count",
+    "last_disconnect",
+]
 
 _LOGGER = logging.getLogger(__name__)
 
