@@ -1,29 +1,27 @@
-[![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/zkfpkdwyhyq)
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fgiuseppecastaldo%2Fha-addons)
+# Gerard33 Home Assistant apps
 
-# Home Assistant Add-on: Whatsapp add-on
+[![Add this repository to your Home Assistant instance](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fgerard33%2Fha-addons)
 
-_Write your Whatsapp message from Home Assistant_
+Home Assistant apps (formerly called add-ons) maintained by Gerard33.
 
-<img src="https://github.com/giuseppecastaldo/ha-addons/blob/main/whatsapp_addon/logo.png?raw=true" width="400"/>
+## Apps
 
-![Supports aarch64 Architecture][aarch64-shield]
-![Supports amd64 Architecture][amd64-shield]
+| App | Description |
+| --- | --- |
+| [WhatsApp](whatsapp_addon/) | Send and receive WhatsApp messages from Home Assistant, with a status sensor and failure notifications |
 
-[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
-[amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
+## Installation
 
-A WhatsApp API client that connects through the WhatsApp Web browser app
+1. Click the button above, or add the repository by hand: **Settings → Apps → App store → ⋮ → Repositories** and enter
 
-**NOTE:** I can't guarantee you will not be blocked by using this method, although it has worked for me. WhatsApp does not allow bots or unofficial clients on their platform, so this shouldn't be considered totally safe.
+   ```text
+   https://github.com/gerard33/ha-addons
+   ```
 
-## Installation guide
-Install add-on from this repository:
-```
-https://github.com/giuseppecastaldo/ha-addons
-```
-Start the add-on and in a few seconds you will see a persistent notification with QRCode, please scan this one with Whatsapp Mobile app.
+2. Find the app in the store, install it and follow its **Documentation** tab.
 
-After add-on installation restart Home Assistant once, so the integration that comes with the add-on is loaded. Then add it via **Settings → Devices & services → Add integration → Whatsapp**. If all went well you will see a _whatsapp.send_message_ action and a status sensor on the _WhatsApp_ device.
+Supported architectures: `aarch64` and `amd64`.
 
-Upgrading from an older version with `whatsapp:` in _configuration.yaml_: the integration is added automatically on the first restart. You can then remove `whatsapp:` from _configuration.yaml_ (Home Assistant shows a repair notice for this).
+## Credits
+
+The WhatsApp app is based on [giuseppecastaldo/ha-addons](https://github.com/giuseppecastaldo/ha-addons) and uses the [Baileys](https://github.com/WhiskeySockets/Baileys) library.
