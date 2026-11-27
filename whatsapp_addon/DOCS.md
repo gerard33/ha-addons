@@ -4,18 +4,6 @@ Send and receive WhatsApp messages from Home Assistant. The app connects to What
 
 > **Note:** WhatsApp does not allow unofficial clients. There is no guarantee your number will not be blocked. Consider using a separate number.
 
-## Contents
-
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Recipients](#recipients)
-- [Actions](#actions)
-- [Events](#events)
-- [Status sensor](#status-sensor)
-- [Failure handling](#failure-handling)
-- [Example automations](#example-automations)
-- [Troubleshooting](#troubleshooting)
-
 ## Installation
 
 1. Add the repository `https://github.com/gerard33/ha-addons` (**Settings → Apps → App store → ⋮ → Repositories**), then install the **WhatsApp** app.
@@ -66,7 +54,7 @@ All actions need `clientId`, the client name from the configuration (usually `de
 | Field | Description |
 | --- | --- |
 | `clientId` | Client to send from |
-| `to` | Recipient, see [Recipients](#recipients) |
+| `to` | Recipient, see **Recipients** above |
 | `body` | Message content, see the examples below |
 | `options` | Optional, for example `quoted` to reply to a message |
 
